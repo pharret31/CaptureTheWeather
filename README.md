@@ -6,7 +6,6 @@ This repository contains my project of creating the android application that can
 Version 1.0
 * This version works.
 
-### Who do I talk to? ###
 
 Repo owner is pharret31. Contact me:
 * pharret31@gmail.com
