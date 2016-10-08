@@ -17,7 +17,7 @@ import java.net.URL;
 import java.util.Date;
 import java.util.concurrent.ExecutionException;
 
-public class Weather {
+public class Weather extends AsyncTask<String, Integer, JSONObject> {
     final private double HECTO_PASCAL = 0.75006375541921;
 
     private Double m_longitude;
@@ -62,26 +62,118 @@ public class Weather {
         m_name = null;
         m_cod = null;
         m_icon = null;
+
+        m_fullWeather = null;
     }
 
-    public int catchTheWeather(String cityName) {
-        ParseURLTask pt = new ParseURLTask();
-        pt.execute(cityName);
+    @Override
+    protected JSONObject doInBackground(String... params) {
+        String cityName = params[0];
+        JSONObject fullWeather = null;
         try {
-            m_fullWeather = pt.get();
-        } catch (InterruptedException | ExecutionException e) {
-            e.printStackTrace();
-        }
-
-        if (m_fullWeather == null) {
-            return -1;
-        }
-
-        try {
-            parseWeatherJSON(m_fullWeather);
+            fullWeather = getWeatherJSON(cityName);
         } catch (JSONException | IOException e) {
             e.printStackTrace();
         }
+        if (fullWeather == null) {
+            return null;
+        }
+        byte [] iconByte = new byte[0];
+        try {
+            iconByte = getIcon(fullWeather.getJSONArray("weather").getJSONObject(0).getString("icon"));
+        } catch (NullPointerException | JSONException | IOException e) {
+            e.printStackTrace();
+        }
+        m_icon = BitmapFactory.decodeByteArray(iconByte, 0, iconByte.length);
+
+        m_fullWeather = fullWeather;
+        try {
+            parseWeatherJSON(fullWeather);
+        } catch (JSONException | IOException e) {
+            e.printStackTrace();
+        }
+
+        return fullWeather;
+    }
+
+    private JSONObject getWeatherJSON(String cityName) throws IOException, JSONException {
+        URL cityWeatherURL = new URL("http://api.openweathermap.org/data/2.5/weather?q=" +
+                cityName + "&lang=gb&units=metric&appid=8e96f740a4459fd1c46f92c82e4cb31d");
+        BufferedReader bufferReader = null;
+        JSONObject city = null;
+        try {
+            HttpURLConnection cityWeatherConnection = (HttpURLConnection)cityWeatherURL.openConnection();
+            cityWeatherConnection.connect();
+
+            bufferReader = new BufferedReader(new InputStreamReader(cityWeatherConnection.getInputStream()));
+            StringBuilder buf = new StringBuilder();
+            String line;
+            while ((line = bufferReader.readLine()) != null) {
+                buf.append(line).append("\n");
+            }
+
+            city = new JSONObject(buf.toString());
+        } finally {
+            if (bufferReader != null) {
+                try {
+                    bufferReader.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        return city;
+    }
+
+    private byte[] getIcon(String iconName) throws IOException, JSONException {
+        URL iconURL = new URL("http://openweathermap.org/img/w/"+iconName+".png");
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        HttpURLConnection iconHttp = (HttpURLConnection)iconURL.openConnection();
+        iconHttp.connect();
+
+        InputStream inputStream = iconHttp.getInputStream();
+        byte[] buffer = new byte[1024];
+        while (inputStream.read(buffer) != -1) {
+            baos.write(buffer);
+        }
+
+        return baos.toByteArray();
+    }
+
+    private int parseWeatherJSON(JSONObject fullWeather) throws JSONException, IOException {
+        JSONObject coordinates = fullWeather.getJSONObject("coord");
+        m_longitude = (Double) coordinates.get("lon");
+        m_latitude = (Double) coordinates.get("lat");
+
+        JSONObject weather = fullWeather.getJSONArray("weather").getJSONObject(0);
+        m_weatherName = weather.getString("main");
+        m_weatherDescription = weather.getString("description");
+
+        m_base = fullWeather.getString("base");
+
+        JSONObject mainPart = fullWeather.getJSONObject("main");
+        m_temperature = (Double) mainPart.get("temp");
+        m_pressure = mainPart.getInt("pressure") * HECTO_PASCAL;
+        m_humidity = mainPart.getInt("humidity");
+
+        JSONObject wind = fullWeather.getJSONObject("wind");
+        m_windSpeed = (Double) wind.get("speed");
+        m_windDegree = (Double) wind.get("deg");
+
+        JSONObject clouds = fullWeather.getJSONObject("clouds");
+        m_clouds = clouds.getInt("all");
+
+        m_dt = new Date((Integer) fullWeather.get("dt") * 1000);
+
+        JSONObject sys = fullWeather.getJSONObject("sys");
+        m_countryName = sys.getString("country");
+        m_sunrise = new Date((Integer) sys.get("sunrise") * 1000);
+        m_sunset = new Date((Integer) sys.get("sunset") * 1000);
+
+        m_id = fullWeather.getInt("id");
+        m_name = fullWeather.getString("name");
+        m_cod = fullWeather.getInt("cod");
 
         return 0;
     }
@@ -160,113 +252,5 @@ public class Weather {
 
     public Bitmap getIcon() {
         return m_icon;
-    }
-
-    private class ParseURLTask extends AsyncTask<String, Integer, JSONObject> {
-        String m_cityName = null;
-
-        @Override
-        protected JSONObject doInBackground(String... params) {
-            m_cityName = params[0];
-            JSONObject weather = null;
-            try {
-                weather = getWeatherJSON(m_cityName);
-            } catch (JSONException | IOException e) {
-                e.printStackTrace();
-            }
-            if (weather == null) {
-                return null;
-            }
-            byte [] iconByte = new byte[0];
-            try {
-                iconByte = getIcon(weather.getString("icon"));
-            } catch (NullPointerException | JSONException | IOException e) {
-                e.printStackTrace();
-            }
-            m_icon = BitmapFactory.decodeByteArray(iconByte, 0, iconByte.length);
-            return weather;
-        }
-
-        private JSONObject getWeatherJSON(String cityName) throws IOException, JSONException {
-            URL cityWeatherURL = new URL("http://api.openweathermap.org/data/2.5/weather?q=" +
-                    cityName + "&lang=ru&units=metric&appid=8e96f740a4459fd1c46f92c82e4cb31d");
-            BufferedReader bufferReader = null;
-            JSONObject city = null;
-            try {
-                HttpURLConnection cityWeatherConnection = (HttpURLConnection)cityWeatherURL.openConnection();
-                cityWeatherConnection.connect();
-
-                bufferReader = new BufferedReader(new InputStreamReader(cityWeatherConnection.getInputStream()));
-                StringBuilder buf = new StringBuilder();
-                String line;
-                while ((line = bufferReader.readLine()) != null) {
-                    buf.append(line).append("\n");
-                }
-
-                city = new JSONObject(buf.toString());
-            } finally {
-                if (bufferReader != null) {
-                    try {
-                        bufferReader.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-
-            return city;
-        }
-
-        private byte[] getIcon(String iconName) throws IOException, JSONException {
-            URL iconURL = new URL("http://openweathermap.org/img/w/"+iconName+".png");
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            HttpURLConnection iconHttp = (HttpURLConnection)iconURL.openConnection();
-            iconHttp.connect();
-
-            InputStream inputStream = iconHttp.getInputStream();
-            byte[] buffer = new byte[1024];
-            while (inputStream.read(buffer) != -1) {
-                baos.write(buffer);
-            }
-
-            return baos.toByteArray();
-        }
-    }
-
-    private int parseWeatherJSON(JSONObject fullWeather) throws JSONException, IOException {
-        JSONObject coordinates = fullWeather.getJSONObject("coord");
-        m_longitude = (Double) coordinates.get("lon");
-        m_latitude = (Double) coordinates.get("lat");
-
-        JSONObject weather = fullWeather.getJSONArray("weather").getJSONObject(0);
-        m_weatherName = weather.getString("main");
-        m_weatherDescription = weather.getString("description");
-
-        m_base = fullWeather.getString("base");
-
-        JSONObject mainPart = fullWeather.getJSONObject("main");
-        m_temperature = (Double) mainPart.get("temp");
-        m_pressure = mainPart.getInt("pressure") * HECTO_PASCAL;
-        m_humidity = mainPart.getInt("humidity");
-
-        JSONObject wind = fullWeather.getJSONObject("wind");
-        m_windSpeed = (Double) wind.get("speed");
-        m_windDegree = (Double) wind.get("deg");
-
-        JSONObject clouds = fullWeather.getJSONObject("clouds");
-        m_clouds = clouds.getInt("all");
-
-        m_dt = new Date((Integer) fullWeather.get("dt") * 1000);
-
-        JSONObject sys = fullWeather.getJSONObject("sys");
-        m_countryName = sys.getString("country");
-        m_sunrise = new Date((Integer) sys.get("sunrise") * 1000);
-        m_sunset = new Date((Integer) sys.get("sunset") * 1000);
-
-        m_id = fullWeather.getInt("id");
-        m_name = fullWeather.getString("name");
-        m_cod = fullWeather.getInt("cod");
-
-        return 0;
     }
 }
