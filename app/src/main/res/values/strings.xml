@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Capture the weather!</string>
+    <string name="weather_icon_description">Weather icon</string>
+    <string name="capture_button_text">Capture</string>
+</resources>
