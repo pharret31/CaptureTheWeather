@@ -7,9 +7,3 @@ This repository contains my project of creating the android application that can
 Version 1.0:
 
 * This version works.
-
-
-
-Mail me:
-
-* pharret31@gmail.com
