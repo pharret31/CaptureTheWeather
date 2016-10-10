@@ -182,6 +182,68 @@ public class MainActivity extends AppCompatActivity {
             m_fullWeather = null;
         }
 
+        class IconThread extends Thread {
+            private String iconName;
+            private Bitmap icon;
+            private int positionInMainList;
+
+            {
+                positionInMainList = -1;
+            }
+
+            public void run() {
+                icon = null;
+                int i = 1000; // Count of repeats
+                while (i > 0) {
+                    byte[] iconByte = new byte[0];
+                    try {
+                        iconByte = getIcon(iconName);
+                    } catch (NullPointerException | JSONException | IOException e) {
+                        e.printStackTrace();
+                    }
+                    icon = BitmapFactory.decodeByteArray(iconByte, 0, iconByte.length);
+
+                    if (icon != null) {
+                        putIconInMainList(icon);
+                        break;
+                    }
+
+                    i--;
+                }
+            }
+
+            private void putIconInMainList(Bitmap _icon) {
+                if (positionInMainList == -1) { return; }
+
+                Map<String, Object> tempMap = m_cityWeathers.get(positionInMainList);
+                tempMap.put("Icon", _icon);
+                m_cityWeathers.set(positionInMainList, tempMap);
+            }
+
+            synchronized void setIconName(String _iconName) {
+                iconName = _iconName;
+            }
+
+            synchronized void setPositionInMainList(int _position) {
+                positionInMainList = _position;
+            }
+
+            private byte[] getIcon(String iconName) throws IOException, JSONException {
+                URL iconURL = new URL("http://openweathermap.org/img/w/"+iconName+".png");
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                HttpURLConnection iconHttp = (HttpURLConnection)iconURL.openConnection();
+                iconHttp.connect();
+
+                InputStream inputStream = iconHttp.getInputStream();
+                byte[] buffer = new byte[1024];
+                while (inputStream.read(buffer) != -1) {
+                    baos.write(buffer);
+                }
+
+                return baos.toByteArray();
+            }
+        }
+
         @Override
         protected JSONObject doInBackground(String... params) {
             String cityName = params[0];
@@ -194,13 +256,6 @@ public class MainActivity extends AppCompatActivity {
             if (fullWeather == null) {
                 return null;
             }
-            byte [] iconByte = new byte[0];
-            try {
-                iconByte = getIcon(fullWeather.getJSONArray("weather").getJSONObject(0).getString("icon"));
-            } catch (NullPointerException | JSONException | IOException e) {
-                e.printStackTrace();
-            }
-            m_icon = BitmapFactory.decodeByteArray(iconByte, 0, iconByte.length);
 
             m_fullWeather = fullWeather;
             try {
@@ -261,6 +316,19 @@ public class MainActivity extends AppCompatActivity {
             }
             m_cityWeathers.add(weatherOrigin);
 
+            String iconName = "";
+            try {
+                iconName = fullWeather.getJSONArray("weather").getJSONObject(0).getString("icon");
+            } catch (NullPointerException | JSONException e) {
+                e.printStackTrace();
+            }
+            if (iconName.length() != 0) {
+                IconThread iconThread = new IconThread();
+                iconThread.setIconName(iconName);
+                iconThread.setPositionInMainList(m_cityWeathers.size() - 1);
+                iconThread.run();
+            }
+
             return fullWeather;
         }
 
@@ -300,21 +368,6 @@ public class MainActivity extends AppCompatActivity {
             return city;
         }
 
-        private byte[] getIcon(String iconName) throws IOException, JSONException {
-            URL iconURL = new URL("http://openweathermap.org/img/w/"+iconName+".png");
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            HttpURLConnection iconHttp = (HttpURLConnection)iconURL.openConnection();
-            iconHttp.connect();
-
-            InputStream inputStream = iconHttp.getInputStream();
-            byte[] buffer = new byte[1024];
-            while (inputStream.read(buffer) != -1) {
-                baos.write(buffer);
-            }
-
-            return baos.toByteArray();
-        }
-
         private int parseWeatherJSON(JSONObject fullWeather) throws JSONException, IOException {
             JSONObject coordinates = fullWeather.getJSONObject("coord");
             m_longitude = (Double) coordinates.get("lon");
@@ -338,12 +391,12 @@ public class MainActivity extends AppCompatActivity {
             JSONObject clouds = fullWeather.getJSONObject("clouds");
             m_clouds = clouds.getInt("all");
 
-            m_dt = new Date((Integer) fullWeather.get("dt") * 1000);
+            m_dt = new Date(Long.valueOf((Integer) fullWeather.get("dt")) * 1000);
 
             JSONObject sys = fullWeather.getJSONObject("sys");
             m_countryName = sys.getString("country");
-            m_sunrise = new Date((Integer) sys.get("sunrise") * 1000);
-            m_sunset = new Date((Integer) sys.get("sunset") * 1000);
+            m_sunrise = new Date(Long.valueOf((Integer) sys.get("sunrise")) * 1000);
+            m_sunset = new Date(Long.valueOf((Integer) sys.get("sunset")) * 1000);
 
             m_id = fullWeather.getInt("id");
             m_name = fullWeather.getString("name");
