@@ -1,5 +1,6 @@
 package pharret31.capturetheweather;
 
+import android.app.LauncherActivity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -101,8 +102,8 @@ public class MainActivity extends AppCompatActivity {
             public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
                 String cityName = (String) m_cityWeathers.get(position).get("City name");
                 m_cityWeathers.remove(position);
-                Weather weather = new Weather();
-                weather.execute(cityName);
+                m_adapter.notifyDataSetChanged();
+                // Re-create the current weather data
                 return true;
             }
         });
@@ -111,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Intent detailsIntent = new Intent(MainActivity.this, DetailsActivity.class);
+                detailsIntent.putExtra("City name", (String)m_cityWeathers.get(position).get("City name"));
                 startActivity(detailsIntent);
             }
         });
@@ -370,8 +372,8 @@ public class MainActivity extends AppCompatActivity {
 
         private int parseWeatherJSON(JSONObject fullWeather) throws JSONException, IOException {
             JSONObject coordinates = fullWeather.getJSONObject("coord");
-            m_longitude = (Double) coordinates.get("lon");
-            m_latitude = (Double) coordinates.get("lat");
+            m_longitude = Double.valueOf(coordinates.get("lon").toString());
+            m_latitude = Double.valueOf(coordinates.get("lat").toString());
 
             JSONObject weather = fullWeather.getJSONArray("weather").getJSONObject(0);
             m_weatherName = weather.getString("main");
@@ -380,13 +382,13 @@ public class MainActivity extends AppCompatActivity {
             m_base = fullWeather.getString("base");
 
             JSONObject mainPart = fullWeather.getJSONObject("main");
-            m_temperature = (Double) mainPart.get("temp");
+            m_temperature = Double.valueOf(mainPart.get("temp").toString());
             m_pressure = mainPart.getInt("pressure") * HECTO_PASCAL;
             m_humidity = mainPart.getInt("humidity");
 
             JSONObject wind = fullWeather.getJSONObject("wind");
-            m_windSpeed = (Double) wind.get("speed");
-            m_windDegree = (Double) wind.get("deg");
+            m_windSpeed = Double.valueOf(wind.get("speed").toString());
+            m_windDegree = Double.valueOf(wind.get("deg").toString());
 
             JSONObject clouds = fullWeather.getJSONObject("clouds");
             m_clouds = clouds.getInt("all");
